@@ -4,10 +4,9 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class ActivityserviceApplication {
+public class ActivityServiceApplication {
 
-    static void main(String[] args) {
-        SpringApplication.run(ActivityserviceApplication.class, args);
+    public static void main(String[] args) {
+        SpringApplication.run(ActivityServiceApplication.class, args);
     }
-
 }
