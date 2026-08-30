@@ -1,6 +1,9 @@
 package com.fitness.aiservice.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fitness.aiservice.model.Activity;
+import com.fitness.aiservice.model.Recommendation;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,9 +15,32 @@ import org.springframework.stereotype.Service;
 public class ActivityAiService {
     private final GraQService graQService;
 
-    public void generateRecommendation(Activity activity) {
+    public Recommendation generateRecommendation(Activity activity) {
         String prompt = createPromptForActivity(activity);
-        log.info("Response from Ai:{}", graQService.getRecommendation(prompt));
+        String aiResponse=graQService.getRecommendation(prompt);
+        log.info("Response from Ai:{}", aiResponse);
+        return processAIResponse(aiResponse,activity);
+    }
+
+    private Recommendation processAIResponse(String aiResponse, Activity activity) {
+        try {
+            // we do these step to store data correct wy in database
+            // response in string it convert into JSON body
+            ObjectMapper objectMapper=new ObjectMapper();
+            JsonNode rootNode=objectMapper.readTree(aiResponse);
+            JsonNode msgNode=rootNode.path("choices")
+                    .get(0)
+                    .path("message")
+                    .path("content");
+            String jsonContent=msgNode.asText()
+                    .replaceAll("^```json\\s*", "")
+                    .replaceAll("\\s*```$", "")
+                    .trim();
+            log.info("Response from Clean AI:{}", jsonContent);
+        }catch (Exception e){
+
+        }
+        return null;
     }
 
     private String createPromptForActivity(Activity activity) {
