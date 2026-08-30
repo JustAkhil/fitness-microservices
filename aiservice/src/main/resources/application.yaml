@@ -31,3 +31,8 @@ eureka:
 kafka:
   topic:
     name: activity-events
+
+graq:
+  api:
+    url: ${GRAQ_URL}
+    key: ${GRAQ_API}
