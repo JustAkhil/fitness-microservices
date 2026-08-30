@@ -1,6 +1,4 @@
 package com.fitness.aiservice.controller;
-
-import com.fitness.aiservice.dto.RecommendationRequest;
 import com.fitness.aiservice.dto.RecommendationResponse;
 import com.fitness.aiservice.service.RecommendationService;
 import lombok.RequiredArgsConstructor;
