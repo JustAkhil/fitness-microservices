@@ -4,10 +4,16 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fitness.aiservice.model.Activity;
 import com.fitness.aiservice.model.Recommendation;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+
+import java.lang.reflect.Array;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 @Service
 @Slf4j
@@ -17,30 +23,111 @@ public class ActivityAiService {
 
     public Recommendation generateRecommendation(Activity activity) {
         String prompt = createPromptForActivity(activity);
-        String aiResponse=graQService.getRecommendation(prompt);
+        String aiResponse = graQService.getRecommendation(prompt);
         log.info("Response from Ai:{}", aiResponse);
-        return processAIResponse(aiResponse,activity);
+        return processAIResponse(aiResponse, activity);
     }
 
     private Recommendation processAIResponse(String aiResponse, Activity activity) {
         try {
             // we do these step to store data correct wy in database
             // response in string it convert into JSON body
-            ObjectMapper objectMapper=new ObjectMapper();
-            JsonNode rootNode=objectMapper.readTree(aiResponse);
-            JsonNode msgNode=rootNode.path("choices")
+            ObjectMapper objectMapper = new ObjectMapper();
+            JsonNode rootNode = objectMapper.readTree(aiResponse);
+            JsonNode msgNode = rootNode.path("choices")
                     .get(0)
                     .path("message")
                     .path("content");
-            String jsonContent=msgNode.asText()
+            String jsonContent = msgNode.asText()
                     .replaceAll("^```json\\s*", "")
                     .replaceAll("\\s*```$", "")
                     .trim();
-            log.info("Response from Clean AI:{}", jsonContent);
-        }catch (Exception e){
 
+            JsonNode fullJson = objectMapper.readTree(jsonContent);
+            JsonNode analysisNode = fullJson.get("analysis");
+            StringBuilder fullAnalysis = new StringBuilder();
+            // convert json to readable formate
+            addAnalysisSection(fullAnalysis, analysisNode, "overall", "Overall:");
+            addAnalysisSection(fullAnalysis, analysisNode, "pace", "pace:");
+            addAnalysisSection(fullAnalysis, analysisNode, "heartRate", "Heart Rate:");
+            addAnalysisSection(fullAnalysis, analysisNode, "caloriesBurned", "Calories Burned:");
+
+            List<String> improvements = extractImprovementsFromJson(fullJson.path("improvements"));
+            List<String> suggestions = extractSuggestionFromJson(fullJson.path("suggestions"));
+            List<String> safety = extractSafetyFromJson(fullJson.path("safety"));
+            return Recommendation.builder()
+                    .activityId(activity.getActivityId())
+                    .userId(activity.getUserId())
+                    .type(activity.getActivityType().toString())
+                    .recommendation(fullAnalysis.toString())
+                    .suggestions(suggestions)
+                    .safety(safety)
+                    .improvements(improvements)
+                    .createdAt(LocalDateTime.now())
+                    .build();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return createDefaultRecommendation(activity);
         }
-        return null;
+    }
+
+    private Recommendation createDefaultRecommendation(Activity activity) {
+        return Recommendation.builder()
+                .activityId(activity.getActivityId())
+                .userId(activity.getUserId())
+                .type(activity.getActivityType().toString())
+                .recommendation("Unable to generate detailed analysis")
+                .suggestions(Collections.singletonList("Consulting a Fitness consultant"))
+                .safety(Arrays.asList(
+                        "Always Warm up before start the exercise",
+                        "Stay Hydrated",
+                        "Listen to your Body"
+                ))
+                .improvements(Collections.singletonList("Continue with your current routine "))
+                .createdAt(LocalDateTime.now())
+                .build();
+    }
+
+    private List<String> extractSafetyFromJson(JsonNode safetyNode) {
+        List<String> safety = new ArrayList<>();
+        safetyNode.forEach(items->safety.add(items.asText()));
+        return safety.isEmpty() ? Collections.singletonList("No Safety found") : safety;
+    }
+
+    private List<String> extractSuggestionFromJson(JsonNode suggestionsNode) {
+        List<String>suggestions = new ArrayList<>();
+        if(suggestionsNode.isArray()){
+            suggestionsNode.forEach(suggestion->{
+                String workout=suggestion.path("workout").asText();
+                String description=suggestion.path("description").asText();
+                suggestions.add(String.format("%s:%s",workout,description));
+            });
+        }
+        return suggestions.isEmpty() ?
+                Collections.singletonList("No suggestions found") :
+                suggestions;
+    }
+
+    private List<String> extractImprovementsFromJson(JsonNode improvementNode) {
+        List<String> improvements = new ArrayList<>();
+        if (improvementNode.isArray()) {
+            improvementNode.forEach(improvement -> {
+                String area = improvement.path("area").asText();
+                String recommendation = improvement.path("recommendation").asText();
+                improvements.add(String.format("%s:%s", area, recommendation));
+            });
+        }
+        return improvements.isEmpty() ?
+                Collections.singletonList("No improvements found")
+                : improvements;
+    }
+
+    private void addAnalysisSection(StringBuilder fullAnalysis, JsonNode analysisNode, String key, String s) {
+        if (!analysisNode.path(key).isMissingNode()) {
+            fullAnalysis.append(s)
+                    .append(analysisNode.path(key).asText())
+                    .append("\n\n");
+        }
     }
 
     private String createPromptForActivity(Activity activity) {
