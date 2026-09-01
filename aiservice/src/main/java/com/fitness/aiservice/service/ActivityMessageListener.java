@@ -20,6 +20,7 @@ public class ActivityMessageListener {
     public void processActivity(Activity activity){
         log.info("Receive Activity for processing: {}",activity.getUserId());
         Recommendation recommendation=activityAiService.generateRecommendation(activity);
+        log.info("Recommendation: {}",recommendation);
         recommendationRepository.save(recommendation);
         log.info("Recommendation saved: {}",recommendation);
     }
